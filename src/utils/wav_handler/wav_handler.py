@@ -41,6 +41,32 @@ def resample_wav(
     )
 
 
+def convert_mono_16kHz_wav(wav_path: Path, output_dir: Path) -> Path:
+    """
+    音声ファイルのモノラル化と16kHzに変換
+    (tmp.wav -> tmp.mono.wav -> tmp.16kHz.mono.wav)
+
+    Args:
+        wav_path: 入力ファイルのパス
+        output_dir: 出力ディレクトリのパス
+
+    Returns:
+        Path: 出力ファイルのパス
+    """
+
+    mono_wav_path = wav_path.with_suffix(".mono.wav")
+    convert2mono(wav_path, output_dir / mono_wav_path.name)
+
+    resampled_mono_wav_path = wav_path.with_suffix(".mono.16kHz.wav")
+    resample_wav(
+        output_dir / mono_wav_path.name,
+        output_dir / resampled_mono_wav_path.name,
+        target_sample_rate=16000,
+    )
+
+    return output_dir / resampled_mono_wav_path.name
+
+
 def write_wav(input_path: Path, output_path: Path, start_time: float, end_time: float):
     """
     音声ファイルの書き出し
