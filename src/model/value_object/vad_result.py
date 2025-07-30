@@ -34,9 +34,3 @@ class VadResult(BaseModel):
 
     def __repr__(self):
         return f"VadResult(start={self.start}, end={self.end}, type={self.type})"
-
-    def get_start_time(self) -> float:
-        return self.start / self.sample_rate
-
-    def get_end_time(self) -> float:
-        return self.end / self.sample_rate

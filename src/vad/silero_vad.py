@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from silero_vad import get_speech_timestamps, load_silero_vad, read_audio
 
 from model.value_object.vad_result import VadResult, VadResultSpeechType
+from model.value_object.wav_position import SpeechPosition
 from utils.const.const import Const
 
 
@@ -35,7 +36,9 @@ class SileroVad:
         self.config = config
         self.model = load_silero_vad(onnx=True)
 
-    def execute_vad(self, wav_path: Path) -> list[VadResult]:
+    def execute_vad(
+        self, wav_path: Path, sample_rate: int = Const.SAMPLE_RATE
+    ) -> list[VadResult]:
         """
         Args:
             wav_path: 音声ファイルのパス
@@ -44,7 +47,6 @@ class SileroVad:
             list[VadResult]: 音声区間のリスト
         """
 
-        _, sample_rate = sf.read(wav_path)
         speech_vad_results, total_samples = self._execute_silero_vad(
             wav_path, sample_rate
         )
