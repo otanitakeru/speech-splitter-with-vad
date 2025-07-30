@@ -8,7 +8,7 @@ from model.value_object.vad_result import VadResult, VadResultSpeechType
 from utils.const.const import Const
 
 
-class StereoVadConfig(BaseModel):
+class SileroVadConfig(BaseModel):
     """
     StereoVadの設定
 
@@ -27,10 +27,11 @@ class StereoVadConfig(BaseModel):
     min_silence_duration_ms: int = 800
     speech_pad_ms: int = 250
     neg_threshold: float = 0.25
+    min_silence_duration_ms_after_vad: int = 0
 
 
-class StereoVad:
-    def __init__(self, config: StereoVadConfig = StereoVadConfig()):
+class SileroVad:
+    def __init__(self, config: SileroVadConfig = SileroVadConfig()):
         self.config = config
         self.model = load_silero_vad(onnx=True)
 
@@ -44,23 +45,24 @@ class StereoVad:
         """
 
         _, sample_rate = sf.read(wav_path)
-        speech_vad_results, total_samples = self._get_speech_vad_result(
+        speech_vad_results, total_samples = self._execute_silero_vad(
             wav_path, sample_rate
         )
 
-        concatinated_vad_results = self._concatinate_vad_results(
-            speech_vad_results, min_silence_duration_ms=0
+        concatinated_speech_vad_results = self._concatinate_speech_vad_results(
+            speech_vad_results,
+            min_silence_duration_ms_after_vad=self.config.min_silence_duration_ms_after_vad,
         )
 
         speech_vad_results_with_non_speech = (
             self._get_speech_vad_result_with_non_speech(
-                concatinated_vad_results, total_samples
+                concatinated_speech_vad_results, total_samples
             )
         )
 
         return speech_vad_results_with_non_speech
 
-    def _get_speech_vad_result(
+    def _execute_silero_vad(
         self, wav_path: Path, sample_rate: int
     ) -> tuple[list[VadResult], int]:
         """
@@ -68,7 +70,7 @@ class StereoVad:
             wav_path: 音声ファイルのパス
 
         Returns:
-            list[VadResult]: 音声区間のリスト
+            list[VadResult]: 音声区間のリスト(発話区間のみ)
         """
 
         wav = read_audio(str(wav_path), sample_rate)
@@ -159,10 +161,10 @@ class StereoVad:
 
         return return_results
 
-    def _concatinate_vad_results(
+    def _concatinate_speech_vad_results(
         self,
         speech_vad_results: list[VadResult],
-        min_silence_duration_ms: int = 1000,
+        min_silence_duration_ms_after_vad: int = 0,
         sample_rate: int = Const.SAMPLE_RATE,
     ) -> list[VadResult]:
         """
@@ -184,7 +186,7 @@ class StereoVad:
             last_result = return_results[-1]
             if (
                 speech_vad_result.start - last_result.end
-                < min_silence_duration_ms * sample_rate / 1000
+                < min_silence_duration_ms_after_vad * sample_rate / 1000
             ):
 
                 last_result.end = speech_vad_result.end

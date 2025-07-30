@@ -9,7 +9,7 @@ from matplotlib.gridspec import GridSpec
 from model.value_object.vad_result import VadResult
 
 
-def plot_vad_analysis(
+def plot_vad_result(
     wav_path: Path,
     vad_results: list[VadResult],
     save_path: Optional[Path] = None,
