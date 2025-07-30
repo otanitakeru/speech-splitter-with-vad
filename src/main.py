@@ -1,3 +1,4 @@
+import argparse
 import shutil
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from utils.wav_handler.wav_handler import convert_mono_16kHz_wav
 from vad.silero_vad import SileroVad
 from visualizer.plot_vad_result import plot_vad_result
 from visualizer.show_speech_position import show_speech_position
+
+OUTPUT_DIR = Path("data/output")
 
 
 def split_wav(wav_path: Path, output_dir: Path):
@@ -50,8 +53,15 @@ def split_wav(wav_path: Path, output_dir: Path):
 
 
 def main():
-    wav_path = Path("assets/wav/original/kikuchi.wav")
-    output_dir = Path("data/output") / wav_path.stem
+    parser = argparse.ArgumentParser(description="音声ファイルを分割するツール")
+    parser.add_argument("wav_path", type=Path, help="入力する音声ファイルのパス")
+    parser.add_argument(
+        "--output_dir", type=Path, default=OUTPUT_DIR, help="出力ディレクトリのパス"
+    )
+    args = parser.parse_args()
+
+    wav_path: Path = args.wav_path
+    output_dir: Path = args.output_dir
     split_wav(wav_path, output_dir)
 
 
