@@ -6,12 +6,12 @@ import numpy as np
 import soundfile as sf
 from matplotlib.gridspec import GridSpec
 
-from model.value_object.vad_result import VadResult
+from model.value_object.speech_position import SpeechPosition
 
 
 def plot_vad_result(
     wav_path: Path,
-    vad_results: list[VadResult],
+    speech_positions: list[SpeechPosition],
     save_path: Optional[Path] = None,
 ):
     """
@@ -24,8 +24,12 @@ def plot_vad_result(
 
     # VAD結果を音声データの時間軸に合わせて展開
     vad_array = np.zeros(len(audio_data))
-    for result in vad_results:
-        vad_array[result.start : result.end] = result.type.value
+    for speech_position in speech_positions:
+        vad_array[
+            int(speech_position.start_s * sample_rate) : int(
+                speech_position.end_s * sample_rate
+            )
+        ] = 1
 
     fig = plt.figure(figsize=(15, 10))
     gs = GridSpec(2, 1, height_ratios=[1, 1])

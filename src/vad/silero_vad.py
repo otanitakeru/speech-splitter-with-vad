@@ -4,9 +4,7 @@ import soundfile as sf
 from pydantic import BaseModel
 from silero_vad import get_speech_timestamps, load_silero_vad, read_audio
 
-from model.value_object.vad_result import VadResult, VadResultSpeechType
-from model.value_object.wav_position import SpeechPosition
-from utils.const.const import Const
+from model.value_object.speech_position import SpeechPosition
 
 
 class SileroVadConfig(BaseModel):
@@ -25,7 +23,7 @@ class SileroVadConfig(BaseModel):
     threshold: float = 0.25
     min_speech_duration_ms: int = 200
     max_speech_duration_s: float = float("inf")
-    min_silence_duration_ms: int = 800
+    min_silence_duration_ms: int = 500
     speech_pad_ms: int = 250
     neg_threshold: float = 0.25
     min_silence_duration_ms_after_vad: int = 0
@@ -36,9 +34,7 @@ class SileroVad:
         self.config = config
         self.model = load_silero_vad(onnx=True)
 
-    def execute_vad(
-        self, wav_path: Path, sample_rate: int = Const.SAMPLE_RATE
-    ) -> list[VadResult]:
+    def execute_vad(self, wav_path: Path) -> list[SpeechPosition]:
         """
         Args:
             wav_path: 音声ファイルのパス
@@ -47,26 +43,20 @@ class SileroVad:
             list[VadResult]: 音声区間のリスト
         """
 
-        speech_vad_results, total_samples = self._execute_silero_vad(
-            wav_path, sample_rate
-        )
+        _, sample_rate = sf.read(wav_path)
 
-        concatinated_speech_vad_results = self._concatinate_speech_vad_results(
-            speech_vad_results,
+        speech_positions = self._execute_silero_vad(wav_path, sample_rate)
+
+        concatinated_speech_positions = self._concatinate_speech_vad_results(
+            speech_positions,
             min_silence_duration_ms_after_vad=self.config.min_silence_duration_ms_after_vad,
         )
 
-        speech_vad_results_with_non_speech = (
-            self._get_speech_vad_result_with_non_speech(
-                concatinated_speech_vad_results, total_samples
-            )
-        )
-
-        return speech_vad_results_with_non_speech
+        return concatinated_speech_positions
 
     def _execute_silero_vad(
         self, wav_path: Path, sample_rate: int
-    ) -> tuple[list[VadResult], int]:
+    ) -> list[SpeechPosition]:
         """
         Args:
             wav_path: 音声ファイルのパス
@@ -87,77 +77,13 @@ class SileroVad:
             neg_threshold=self.config.neg_threshold,
         )
 
-        return_results: list[VadResult] = []
+        return_results: list[SpeechPosition] = []
 
         for timestamp in speech_timestamps:
             return_results.append(
-                VadResult(
-                    start=timestamp["start"],
-                    end=timestamp["end"],
-                    type=VadResultSpeechType.SPEECH,
-                )
-            )
-
-        return return_results, wav.shape[0]
-
-    def _get_speech_vad_result_with_non_speech(
-        self, speech_vad_results: list[VadResult], total_samples: int
-    ) -> list[VadResult]:
-        """
-        Args:
-            speech_vad_results: 音声区間のリスト
-            total_samples: 音声データの総サンプル数
-
-        Returns:
-            list[VadResult]: 音声区間のリスト
-        """
-        return_results: list[VadResult] = []
-
-        # speech_timestampsが空の場合、全体を無声音として扱う
-        if not speech_vad_results:
-            return_results.append(
-                VadResult(
-                    start=0,
-                    end=total_samples,
-                    type=VadResultSpeechType.NON_SPEECH,
-                )
-            )
-            return return_results
-
-        current_sample = 0
-
-        for speech_vad_result in speech_vad_results:
-            start_sample = speech_vad_result.start
-            end_sample = speech_vad_result.end
-
-            # 前の区間の終了から現在の有声音区間の開始までの無声音区間を追加
-            if current_sample < start_sample:
-                return_results.append(
-                    VadResult(
-                        start=current_sample,
-                        end=start_sample,
-                        type=VadResultSpeechType.NON_SPEECH,
-                    )
-                )
-
-            # 有声音区間を追加
-            return_results.append(
-                VadResult(
-                    start=start_sample,
-                    end=end_sample,
-                    type=VadResultSpeechType.SPEECH,
-                )
-            )
-
-            current_sample = end_sample
-
-        # 最後の有声音区間の後に残りの無声音区間があれば追加
-        if current_sample < total_samples:
-            return_results.append(
-                VadResult(
-                    start=current_sample,
-                    end=total_samples,
-                    type=VadResultSpeechType.NON_SPEECH,
+                SpeechPosition(
+                    start_s=timestamp["start"] / sample_rate,
+                    end_s=timestamp["end"] / sample_rate,
                 )
             )
 
@@ -165,10 +91,9 @@ class SileroVad:
 
     def _concatinate_speech_vad_results(
         self,
-        speech_vad_results: list[VadResult],
+        speech_positions: list[SpeechPosition],
         min_silence_duration_ms_after_vad: int = 0,
-        sample_rate: int = Const.SAMPLE_RATE,
-    ) -> list[VadResult]:
+    ) -> list[SpeechPosition]:
         """
         Args:
             vad_results: VAD結果のリスト
@@ -177,22 +102,22 @@ class SileroVad:
             list[VadResult]: 結合処理後のVAD結果リスト
         """
 
-        return_results: list[VadResult] = []
+        return_speech_positions: list[SpeechPosition] = []
 
-        for speech_vad_result in speech_vad_results:
+        for speech_position in speech_positions:
 
-            if len(return_results) == 0:
-                return_results.append(speech_vad_result)
+            if len(return_speech_positions) == 0:
+                return_speech_positions.append(speech_position)
                 continue
 
-            last_result = return_results[-1]
+            last_speech_position = return_speech_positions[-1]
             if (
-                speech_vad_result.start - last_result.end
-                < min_silence_duration_ms_after_vad * sample_rate / 1000
+                speech_position.start_s - last_speech_position.end_s
+                < min_silence_duration_ms_after_vad / 1000
             ):
 
-                last_result.end = speech_vad_result.end
+                last_speech_position.end_s = speech_position.end_s
             else:
-                return_results.append(speech_vad_result)
+                return_speech_positions.append(speech_position)
 
-        return return_results
+        return return_speech_positions

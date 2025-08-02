@@ -1,4 +1,4 @@
-from model.value_object.wav_position import SpeechPosition
+from model.value_object.speech_position import SpeechPosition
 
 
 def show_speech_position(speech_positions: list[SpeechPosition]):
