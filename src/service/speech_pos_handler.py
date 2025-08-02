@@ -1,9 +1,8 @@
 import json
 from pathlib import Path
 
-from model.value_object.vad_result import VadResult, VadResultSpeechType
-from model.value_object.wav_position import SpeechPosition
-from utils.const.const import Const
+from ATR503.formatter import convert_ATR503_format_from
+from model.value_object.speech_position import SpeechPosition
 
 
 def write_json_from_speech_positions(
@@ -51,7 +50,7 @@ def write_json_from_speech_positions(
 
 
 def write_text_from_speech_positions(
-    wav_positions: list[SpeechPosition], file_path: Path
+    wav_positions: list[SpeechPosition], file_path: Path, ATR_503_format: bool = False
 ):
     """
     発話区間のリストをテキストファイルに書き込む
@@ -73,20 +72,16 @@ def write_text_from_speech_positions(
     result_text = ""
     index = 1
     for wav_position in wav_positions:
-        result_text += f"{wav_position.start_s}\t{wav_position.end_s}\t{index}\n"
+        if ATR_503_format:
+            result_text += f"{wav_position.start_s:7.2f}\t{wav_position.end_s:7.2f}\t{convert_ATR503_format_from(index)}\n"
+        else:
+            result_text += (
+                f"{wav_position.start_s:7.2f}\t{wav_position.end_s:7.2f}\t{index}\n"
+            )
         index += 1
 
     with open(file_path, "w") as f:
         f.write(result_text)
-
-
-def get_speech_position_from_vad_result(
-    vad_result: VadResult, sample_rate: int = Const.SAMPLE_RATE
-) -> SpeechPosition:
-    return SpeechPosition(
-        start_s=vad_result.start / sample_rate,
-        end_s=vad_result.end / sample_rate,
-    )
 
 
 def get_speech_positions_from_file(file_path: Path) -> list[SpeechPosition]:
@@ -99,6 +94,9 @@ def get_speech_positions_from_file(file_path: Path) -> list[SpeechPosition]:
 
         speech_positions = []
         for line in text.split("\n"):
+            if line.strip() == "":
+                continue
+
             start, end, _ = line.split("\t")
             speech_positions.append(
                 SpeechPosition(start_s=float(start), end_s=float(end))
