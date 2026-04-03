@@ -1,15 +1,6 @@
 # Speech Splitter with VAD
 
-VAD（Voice Activity Detection）を使用して音声ファイルから発話区間を検出するPythonツールです。Silero VADモデルを使用して音声区間を検出し、視覚化と分析結果を提供します。
-
-## 機能
-
-- **Silero VAD**を使用した高精度な音声区間検出
-- 音声ファイルの自動分割（VADベース）
-- 音声区間の可視化
-- 16kHzモノラル形式への自動変換
-- 発話位置の詳細分析とテキスト出力
-- VAD結果のグラフ表示
+VAD（Voice Activity Detection）を使用して音声ファイルから発話区間を検出するPythonツールです。[Silero VAD](https://github.com/snakers4/silero-vad) を使用して高精度に発話区間を検出し、テキスト・JSON・グラフの3形式で結果を出力できます。
 
 ## セットアップ
 
@@ -20,13 +11,7 @@ git clone <repository-url>
 cd speech-splitter-with-vad
 ```
 
-### 2. 依存関係のインストール
-
-```bash
-make setup
-```
-
-または手動でセットアップ：
+### 2. 仮想環境の作成と依存パッケージのインストール
 
 ```bash
 python3 -m venv venv
@@ -36,40 +21,97 @@ pip install -r requirements.txt
 
 ## 使用方法
 
-### 基本的な使用方法
+### シェルスクリプトで実行（推奨）
 
 ```bash
-# デフォルトのテストファイルで実行
-make run
-
-# または直接実行
-source venv/bin/activate
-python src/main.py [/path/to/your/audio/file]
+bash scripts/run_vad.sh <INPUT_WAV_PATH> <OUTPUT_DIR_PATH> <VAD_CONFIG_PATH>
 ```
+
+例:
+
+```bash
+bash scripts/run_vad.sh \
+    data/wav/test/test.wav \
+    outputs/vad_results/test \
+    config/test/vad.yaml
+```
+
+実行後、以下のディレクトリ構造で出力されます:
+
+```
+<OUTPUT_DIR_PATH>/
+├── original/   # 入力ファイルと同ディレクトリのファイルをコピー
+├── result/     # VAD結果ファイル
+└── config/
+    └── vad.yaml  # 使用したVAD設定のコピー
+```
+
+### Pythonスクリプトで直接実行
+
+```bash
+source venv/bin/activate
+cd src
+python run_vad.py \
+    -i /path/to/audio.wav \
+    --output_dir_path /path/to/output \
+    --vad_config_path /path/to/vad.yaml \
+    --write_text \
+    --write_json \
+    --write_plot
+```
+
+#### 引数一覧
+
+| 引数                     | 型   | デフォルト | 説明                                       |
+| ------------------------ | ---- | ---------- | ------------------------------------------ |
+| `-i`, `--input_wav_path` | Path | -          | 入力音声ファイルのパス                     |
+| `--output_dir_path`      | Path | -          | 出力先ディレクトリ                         |
+| `--vad_config_path`      | Path | -          | VADパラメータのYAML設定ファイルパス        |
+| `--channel`              | int  | `None`     | 使用するチャンネルのインデックス (0-based) |
+| `--write_text`           | flag | `False`    | テキスト形式で結果を保存                   |
+| `--write_json`           | flag | `False`    | JSON形式で結果を保存                       |
+| `--write_plot`           | flag | `False`    | 波形プロット画像を保存                     |
+
+`--channel` を省略すると全チャンネルの平均でモノラル化します。
 
 ## 出力ファイル
 
-処理完了後、指定した出力ディレクトリ（デフォルト: `data/output`）に以下のファイルが生成されます：
+| ファイル名              | 説明                                                   |
+| ----------------------- | ------------------------------------------------------ |
+| `speech_positions.txt`  | `start_s \t end_s \t index` の形式で発話区間を列挙     |
+| `speech_positions.json` | `[{"start_s": float, "end_s": float}, ...]` 形式のJSON |
+| `vad_result.png`        | 音声波形に発話区間（赤ハイライト）を重ねたプロット     |
 
-- `wav_positions.txt`: 検出された音声区間の詳細情報
-- `vad_analysis.png`: VAD結果の可視化グラフ
+## VADパラメータのカスタマイズ
 
-## Makeコマンド
+`src/config/config.py` の `SileroVadConfig` または YAMLファイルでパラメータを調整できます。
 
-```bash
-make setup    # 環境セットアップ
-make run      # デフォルト実行
-make clean    # 一時ファイルクリーンアップ
+| パラメータ                          | デフォルト | 説明                                            |
+| ----------------------------------- | ---------- | ----------------------------------------------- |
+| `threshold`                         | `0.25`     | 発話判定の確率閾値                              |
+| `neg_threshold`                     | `0.25`     | 発話→無音への遷移閾値                           |
+| `min_speech_duration_ms`            | `200`      | 最小発話長（ms）。これ未満の区間は除外          |
+| `max_speech_duration_s`             | `inf`      | 最大発話長（秒）。超過した場合は分割            |
+| `min_silence_duration_ms`           | `250`      | Silero VAD が発話区間を分離する最小無音長（ms） |
+| `speech_pad_ms`                     | `250`      | 発話区間の前後に追加するパディング（ms）        |
+| `min_silence_duration_ms_after_vad` | `500`      | VAD後の後処理で隣接区間を結合する無音閾値（ms） |
+
+YAMLファイルから読み込む例:
+
+```python
+from pathlib import Path
+from config.config import SileroVadConfig
+
+config = SileroVadConfig.load_from_yaml(Path("config.yaml"))
 ```
 
-## トラブルシューティング
+```yaml
+# config.yaml
+threshold: 0.3
+min_silence_duration_ms: 300
+speech_pad_ms: 100
+```
 
-### 音声ファイル形式
+## 参考
 
-入力音声ファイルは自動的に16kHzモノラル形式に変換されます。対応形式：
-- WAV, MP3, FLAC, M4A など（librosaが対応する形式）
-
-### Silero VADについて
-
-音声区間検出にSilero VADを使用しています：
-- GitHub: https://github.com/snakers4/silero-vad
+- [Silero VAD](https://github.com/snakers4/silero-vad)

@@ -1,6 +1,7 @@
 soundfile
-librosa
 silero-vad
-matplotlib
-numpy
+onnxruntime
+librosa
 pydantic
+pyyaml
+matplotlib

@@ -1,82 +1,63 @@
 from pathlib import Path
+from typing import Optional
 
 import librosa
+import numpy as np
 import soundfile as sf
 
-from utils.const.const import Const
+from utils.const import Const
 
 
-def convert2mono(input_path: Path, output_path: Path):
+def convert_to_mono(
+    input_wav_data: np.ndarray, channel: Optional[int] = None
+) -> np.ndarray:
     """
-    音声ファイルのモノラル化
+    音声データをモノラルに変換する
 
     Args:
-        input_path: 入力ファイルのパス
-        output_path: 出力ファイルのパス
-    """
+        input_wav_data: 入力音声データ (shape: (samples,) or (samples, channels))
+        channel: 抽出するチャンネルのインデックス (0-based)。
+                 None の場合は全チャンネルの平均でモノラル化する。
 
-    data, sample_rate = sf.read(input_path)
-    data = data.mean(axis=1)
-    sf.write(output_path, data, sample_rate, format="WAV", subtype="PCM_16")
+    Returns:
+        np.ndarray: モノラル化された音声データ (shape: (samples,))
+
+    Raises:
+        ValueError: channel が範囲外の場合
+    """
+    if input_wav_data.ndim == 1:
+        return input_wav_data
+
+    if channel is None:
+        return input_wav_data.mean(axis=1)
+
+    num_channels = input_wav_data.shape[1]
+    if channel < 0 or channel >= num_channels:
+        raise ValueError(
+            f"チャンネルインデックス {channel} が範囲外です。有効範囲: 0 〜 {num_channels - 1}"
+        )
+
+    return input_wav_data[:, channel]
 
 
 def resample_wav(
-    input_path: Path, output_path: Path, target_sample_rate: int = Const.SAMPLE_RATE
-):
+    input_wav_data: np.ndarray,
+    sample_rate: int,
+    target_sample_rate: int = Const.SAMPLE_RATE,
+) -> np.ndarray:
     """
     音声ファイルのサンプリングレートの変更
 
     Args:
-        input_path: 入力ファイルのパス
-        output_path: 出力ファイルのパス
+        input_wav_data: 入力音声データ
+        sample_rate: 入力音声のサンプリングレート
         target_sample_rate: 変更後のサンプリングレート
-    """
-
-    data, sample_rate = sf.read(input_path)
-    resampled_wav = librosa.resample(
-        data, orig_sr=sample_rate, target_sr=target_sample_rate
-    )
-    sf.write(
-        output_path, resampled_wav, target_sample_rate, format="WAV", subtype="PCM_16"
-    )
-
-
-def convert_mono_16kHz_wav(wav_path: Path, output_dir: Path) -> Path:
-    """
-    音声ファイルのモノラル化と16kHzに変換
-    (tmp.wav -> tmp.mono.wav -> tmp.16kHz.mono.wav)
-
-    Args:
-        wav_path: 入力ファイルのパス
-        output_dir: 出力ディレクトリのパス
 
     Returns:
-        Path: 出力ファイルのパス
+        np.ndarray: サンプリングレート変更後の音声データ
     """
 
-    mono_wav_path = wav_path.with_suffix(".mono.wav")
-    convert2mono(wav_path, output_dir / mono_wav_path.name)
-
-    resampled_mono_wav_path = wav_path.with_suffix(".mono.16kHz.wav")
-    resample_wav(
-        output_dir / mono_wav_path.name,
-        output_dir / resampled_mono_wav_path.name,
-        target_sample_rate=16000,
+    resampled_data = librosa.resample(
+        input_wav_data, orig_sr=sample_rate, target_sr=target_sample_rate
     )
-
-    return output_dir / resampled_mono_wav_path.name
-
-
-def write_wav(input_path: Path, output_path: Path, start_time: float, end_time: float):
-    """
-    音声ファイルの書き出し
-
-    Args:
-        input_path: 入力ファイルのパス
-        output_path: 出力ファイルのパス
-        start_time: 開始時間
-        end_time: 終了時間
-    """
-    data, sample_rate = sf.read(input_path)
-    data = data[int(start_time * sample_rate) : int(end_time * sample_rate)]
-    sf.write(output_path, data, sample_rate, format="WAV")
+    return resampled_data
