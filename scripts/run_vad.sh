@@ -20,6 +20,7 @@ cp $VAD_CONFIG_PATH $OUTPUT_DIR_PATH/config/vad.yaml
 python src/run_vad.py \
     -i $INPUT_WAV_PATH \
     --output_dir_path $OUTPUT_DIR_PATH/result \
+    --vad_config_path $VAD_CONFIG_PATH \
     --write_text \
     --write_json \
     --write_plot
