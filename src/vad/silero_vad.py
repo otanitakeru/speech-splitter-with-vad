@@ -1,32 +1,33 @@
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import soundfile as sf
-from pydantic import BaseModel
-from silero_vad import get_speech_timestamps, load_silero_vad, read_audio
+import torch
+from silero_vad import get_speech_timestamps, load_silero_vad
+from torch import Tensor
 
-from model.value_object.speech_position import SpeechPosition
+from config.config import SileroVadConfig
+from utils.const import Const
+from utils.wav_handler import convert_to_mono, resample_wav
 
 
-class SileroVadConfig(BaseModel):
-    """
-    StereoVadの設定
+@dataclass
+class SpeechPosition:
+    start_s: float
+    end_s: float
 
-    Args:
-        threshold: 発話判定の閾値。この値以上の確率で発話と判定
-        min_speech_duration_ms: 最小発話時間（ミリ秒）。これより短い発話は除外
-        max_speech_duration_s: 最大発話時間（秒）。これより長い場合は分割
-        min_silence_duration_ms: 発話区間を分離するための最小無音時間
-        speech_pad_ms: 発話区間の前後に追加する無声音区間の長さ（ミリ秒）
-        neg_threshold: 無音判定の閾値（発話状態から無音状態への遷移用）
-    """
+    def __str__(self):
+        return f"SpeechPosition(start={self.start_s}, end={self.end_s})"
 
-    threshold: float = 0.25
-    min_speech_duration_ms: int = 200
-    max_speech_duration_s: float = float("inf")
-    min_silence_duration_ms: int = 500
-    speech_pad_ms: int = 250
-    neg_threshold: float = 0.25
-    min_silence_duration_ms_after_vad: int = 0
+    def __repr__(self):
+        return f"SpeechPosition(start={self.start_s}, end={self.end_s})"
+
+    def to_dict(self):
+        return {
+            "start_s": self.start_s,
+            "end_s": self.end_s,
+        }
 
 
 class SileroVad:
@@ -34,18 +35,26 @@ class SileroVad:
         self.config = config
         self.model = load_silero_vad(onnx=True)
 
-    def execute_vad(self, wav_path: Path) -> list[SpeechPosition]:
+    def execute_vad(
+        self, wav_path: Path, channel: Optional[int] = None
+    ) -> list[SpeechPosition]:
         """
         Args:
             wav_path: 音声ファイルのパス
-
+            channel: 音声チャンネルのインデックス (0-based)。
+                     None の場合は全チャンネルの平均でモノラル化する。
         Returns:
             list[VadResult]: 音声区間のリスト
         """
 
-        _, sample_rate = sf.read(wav_path)
+        sample_rate = Const.SAMPLE_RATE
+        wav_data, original_sample_rate = sf.read(wav_path)
+        wav_data = convert_to_mono(wav_data, channel=channel)
+        wav_data = resample_wav(wav_data, original_sample_rate, sample_rate)
 
-        speech_positions = self._execute_silero_vad(wav_path, sample_rate)
+        speech_positions = self._execute_silero_vad(
+            torch.from_numpy(wav_data).float(), sample_rate
+        )
 
         concatinated_speech_positions = self._concatinate_speech_vad_results(
             speech_positions,
@@ -55,19 +64,18 @@ class SileroVad:
         return concatinated_speech_positions
 
     def _execute_silero_vad(
-        self, wav_path: Path, sample_rate: int
+        self, wav_data: Tensor, sample_rate: int
     ) -> list[SpeechPosition]:
         """
         Args:
             wav_path: 音声ファイルのパス
 
         Returns:
-            list[VadResult]: 音声区間のリスト(発話区間のみ)
+            list[SpeechPosition]: 音声区間のリスト(発話区間のみ)
         """
 
-        wav = read_audio(str(wav_path), sample_rate)
         speech_timestamps = get_speech_timestamps(
-            wav,
+            wav_data,
             self.model,
             threshold=self.config.threshold,
             min_speech_duration_ms=self.config.min_speech_duration_ms,
@@ -80,10 +88,13 @@ class SileroVad:
         return_results: list[SpeechPosition] = []
 
         for timestamp in speech_timestamps:
+            start_s = timestamp["start"] / sample_rate
+            end_s = min(timestamp["end"] / sample_rate, len(wav_data) / sample_rate)
+
             return_results.append(
                 SpeechPosition(
-                    start_s=timestamp["start"] / sample_rate,
-                    end_s=timestamp["end"] / sample_rate,
+                    start_s=start_s,
+                    end_s=end_s,
                 )
             )
 
@@ -99,7 +110,7 @@ class SileroVad:
             vad_results: VAD結果のリスト
 
         Returns:
-            list[VadResult]: 結合処理後のVAD結果リスト
+            list[SpeechPosition]: 結合処理後のVAD結果リスト
         """
 
         return_speech_positions: list[SpeechPosition] = []

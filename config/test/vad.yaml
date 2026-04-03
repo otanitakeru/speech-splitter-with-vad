@@ -1,0 +1,6 @@
+threshold: 0.25
+min_speech_duration_ms: 200
+min_silence_duration_ms: 500
+speech_pad_ms: 250
+neg_threshold: 0.25
+min_silence_duration_ms_after_vad: 500
