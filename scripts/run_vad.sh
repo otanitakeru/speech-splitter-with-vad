@@ -8,13 +8,9 @@ INPUT_WAV_PATH=$1
 OUTPUT_DIR_PATH=$2
 VAD_CONFIG_PATH=$3
 
-mkdir -p $OUTPUT_DIR_PATH
-mkdir -p $OUTPUT_DIR_PATH/original
-mkdir -p $OUTPUT_DIR_PATH/result
-mkdir -p $OUTPUT_DIR_PATH/config
+mkdir -p $OUTPUT_DIR_PATH $OUTPUT_DIR_PATH/original $OUTPUT_DIR_PATH/result $OUTPUT_DIR_PATH/config
 
-input_dir_path=$(dirname $INPUT_WAV_PATH)
-cp -r $input_dir_path/* $OUTPUT_DIR_PATH/original
+cp $INPUT_WAV_PATH $OUTPUT_DIR_PATH/original
 cp $VAD_CONFIG_PATH $OUTPUT_DIR_PATH/config/vad.yaml
 
 python src/run_vad.py \

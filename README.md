@@ -31,9 +31,9 @@ bash scripts/run_vad.sh <INPUT_WAV_PATH> <OUTPUT_DIR_PATH> <VAD_CONFIG_PATH>
 
 ```bash
 bash scripts/run_vad.sh \
-    data/wav/test/test.wav \
-    outputs/vad_results/test \
-    config/test/vad.yaml
+    /path/to/audio.wav \
+    /path/to/output/dir/ \
+    /path/to/vad.yaml
 ```
 
 実行後、以下のディレクトリ構造で出力されます:
@@ -53,8 +53,8 @@ source venv/bin/activate
 cd src
 python run_vad.py \
     -i /path/to/audio.wav \
-    --output_dir_path /path/to/output \
-    --vad_config_path /path/to/vad.yaml \
+    --output_dir_path /path/to/output/dir/ \
+    --vad_config_path /path/to/config/vad.yaml \
     --write_text \
     --write_json \
     --write_plot

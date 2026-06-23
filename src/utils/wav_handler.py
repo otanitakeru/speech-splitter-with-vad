@@ -29,7 +29,7 @@ def convert_to_mono(
         return input_wav_data
 
     if channel is None:
-        return input_wav_data.mean(axis=1)
+        return input_wav_data[:, 0]
 
     num_channels = input_wav_data.shape[1]
     if channel < 0 or channel >= num_channels:
